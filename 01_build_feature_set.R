@@ -190,8 +190,21 @@ saveRDS(profiling_vars, "profiling_vars.rds")
 write.csv(cbind(MEM_NUM = member_ids$MEM_NUM, cluster_features, profiling_vars),
           "cluster_features.csv", row.names = FALSE)
 
+## Original-units version of the same 26 features (pre-log, pre-z-score),
+## kept separately for profiling: cluster summary tables and plots should
+## show stakeholders real dollars/days/counts, not z-scores, since z-scores
+## are meaningless to a non-technical audience. This is the same row order
+## as cluster_features.rds, so it can be joined to cluster assignments by
+## position or by MEM_NUM.
+original_units_vars <- c(skewed_continuous_vars, symmetric_continuous_vars,
+                          binary_vars, categorical_vars)
+cluster_features_original_units <- df_transformed %>%
+  select(all_of(original_units_vars))
+saveRDS(cluster_features_original_units, "cluster_features_original_units.rds")
+
 cat("\nSaved: cluster_features.rds (26-feature clustering input),\n")
 cat("       member_ids.rds (join key),\n")
 cat("       profiling_vars.rds (PRV_GROUP, for post-hoc profiling only),\n")
-cat("       cluster_features.csv (combined, for inspection)\n")
+cat("       cluster_features.csv (combined, for inspection),\n")
+cat("       cluster_features_original_units.rds (pre-transform values, for profiling)\n")
 cat("Feature set construction complete. Ready for Step 2 (k-prototypes clustering).\n")
