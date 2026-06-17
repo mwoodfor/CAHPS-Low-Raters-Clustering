@@ -32,8 +32,8 @@ required_vars <- c(
   "member_plan", "lis_ind", "dis_ind",
   # Household & engagement
   "family_members", "myblue_visits", "email_optin",
-  # Geography & provider
-  "MA_REGION", "PRV_GROUP",
+  # Geography
+  "MA_REGION",
   # Pharmacy utilization
   "total_pharm_oop", "total_pharm_allow", "total_supply_days",
   "abandoned_scripts", "total_pharm_denied", "mail_order_flag",
@@ -45,7 +45,14 @@ required_vars <- c(
   "total_grievances", "total_appeals", "any_auth"
 )
 
-missing_vars <- setdiff(required_vars, names(raw))
+# PRV_GROUP is NOT a clustering feature (dropped: ~20 provider-group levels in
+# Massachusetts with no natural collapsing hierarchy; risked dominating the
+# categorical distance component and producing clusters that just reflect
+# provider group rather than member behavior/clinical profile). It is carried
+# through separately for POST-HOC descriptive profiling of final clusters only.
+profiling_only_vars <- c("PRV_GROUP")
+
+missing_vars <- setdiff(c(required_vars, profiling_only_vars), names(raw))
 if (length(missing_vars) > 0) {
   stop("Missing expected variable(s) in source data: ",
        paste(missing_vars, collapse = ", "))
@@ -54,10 +61,12 @@ if (length(missing_vars) > 0) {
 ## ------------------------------------------------------------
 ## 2. SELECT FEATURE SET (drop everything not in the final spec)
 ## ------------------------------------------------------------
-df <- raw %>% select(all_of(required_vars))
+df <- raw %>% select(all_of(c(required_vars, profiling_only_vars)))
 
 ## ------------------------------------------------------------
-## 3. COLLAPSE RARE PRV_GROUP LEVELS INTO "Other"
+## 3. COLLAPSE RARE PRV_GROUP LEVELS INTO "Other" (PROFILING ONLY —
+##    this variable does not enter the clustering feature set; the
+##    collapse just keeps the post-hoc cross-tab readable)
 ## ------------------------------------------------------------
 prv_freq <- df %>%
   count(PRV_GROUP) %>%
@@ -65,7 +74,7 @@ prv_freq <- df %>%
 
 rare_groups <- prv_freq %>% filter(pct < prv_group_min_pct) %>% pull(PRV_GROUP)
 
-cat("\nPRV_GROUP levels collapsed to 'Other' (<", prv_group_min_pct * 100,
+cat("\nPRV_GROUP levels collapsed to 'Other' for profiling (<", prv_group_min_pct * 100,
     "% of sample):", length(rare_groups), "of", nrow(prv_freq), "levels\n")
 
 df <- df %>%
@@ -75,8 +84,8 @@ df <- df %>%
 ## 4. TYPE ASSIGNMENT
 ## ------------------------------------------------------------
 
-# Categorical (4)
-categorical_vars <- c("MEM_GENDER", "member_plan", "MA_REGION", "PRV_GROUP")
+# Categorical (3) — PRV_GROUP excluded; see note in section 2
+categorical_vars <- c("MEM_GENDER", "member_plan", "MA_REGION")
 
 # Binary (5) — passed through untouched, 0/1
 binary_vars <- c("lis_ind", "dis_ind", "email_optin", "mail_order_flag", "any_auth")
@@ -97,7 +106,7 @@ symmetric_continuous_vars <- c(
 
 stopifnot(
   length(categorical_vars) + length(binary_vars) +
-    length(skewed_continuous_vars) + length(symmetric_continuous_vars) == 27
+    length(skewed_continuous_vars) + length(symmetric_continuous_vars) == 26
 )
 
 ## ------------------------------------------------------------
@@ -142,10 +151,13 @@ for (v in binary_vars) {
   df_transformed[[v]] <- as.numeric(df_transformed[[v]])
 }
 
-## 6d. Categorical vars -> factors
+## 6d. Categorical vars (clustering) -> factors
 for (v in categorical_vars) {
   df_transformed[[v]] <- as.factor(df_transformed[[v]])
 }
+
+## 6e. PRV_GROUP (profiling only) -> factor, kept out of clustering frame
+df_transformed[["PRV_GROUP"]] <- as.factor(df_transformed[["PRV_GROUP"]])
 
 ## ------------------------------------------------------------
 ## 7. ASSEMBLE FINAL CLUSTERING-READY DATASET
@@ -160,18 +172,26 @@ cluster_features <- df_transformed %>%
 # Keep ID separately for joining cluster assignments back later
 member_ids <- df_transformed %>% select(MEM_NUM)
 
+# Keep PRV_GROUP separately — for POST-HOC profiling of final clusters only,
+# never as a clustering input (see note in section 2)
+profiling_vars <- df_transformed %>% select(PRV_GROUP)
+
 cat("\nFinal clustering feature set dimensions:", nrow(cluster_features),
     "rows x", ncol(cluster_features), "cols\n")
-cat("Expected: 10 skewed-continuous (z) + 8 symmetric-continuous (z) + 5 binary + 4 categorical = 27\n")
-stopifnot(ncol(cluster_features) == 27)
+cat("Expected: 10 skewed-continuous (z) + 8 symmetric-continuous (z) + 5 binary + 3 categorical = 26\n")
+stopifnot(ncol(cluster_features) == 26)
 
 ## ------------------------------------------------------------
 ## 8. SAVE OUTPUTS
 ## ------------------------------------------------------------
 saveRDS(cluster_features, "cluster_features.rds")
 saveRDS(member_ids, "member_ids.rds")
-write.csv(cbind(MEM_NUM = member_ids$MEM_NUM, cluster_features),
+saveRDS(profiling_vars, "profiling_vars.rds")
+write.csv(cbind(MEM_NUM = member_ids$MEM_NUM, cluster_features, profiling_vars),
           "cluster_features.csv", row.names = FALSE)
 
-cat("\nSaved: cluster_features.rds, member_ids.rds, cluster_features.csv\n")
+cat("\nSaved: cluster_features.rds (26-feature clustering input),\n")
+cat("       member_ids.rds (join key),\n")
+cat("       profiling_vars.rds (PRV_GROUP, for post-hoc profiling only),\n")
+cat("       cluster_features.csv (combined, for inspection)\n")
 cat("Feature set construction complete. Ready for Step 2 (k-prototypes clustering).\n")
