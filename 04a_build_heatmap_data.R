@@ -20,6 +20,18 @@ max_total_rows    <- 14  # hard cap on heatmap rows after dedup, so the
                           # few top variables (worst case: k x top_n_per_cluster
                           # unique rows)
 
+## EDIT CLUSTER NAMES HERE. Keys must match the cluster numbers produced by
+## 02_run_clustering.R / 03_profile_clusters.R (usually 1..k). Names are
+## baked into the generated HTML at the next run of this script -- there
+## is no live editing in the HTML file itself, so re-run this script after
+## changing names below.
+cluster_names <- c(
+  "1" = "Cluster 1",
+  "2" = "Cluster 2",
+  "3" = "Cluster 3",
+  "4" = "Cluster 4"
+)
+
 ## ------------------------------------------------------------
 ## 1. LOAD PROFILING OUTPUTS (from 03_profile_clusters.R)
 ## ------------------------------------------------------------
@@ -167,8 +179,30 @@ json_rows <- heatmap_data %>%
 data_js <- paste0("[\n", paste(json_rows, collapse = ",\n"), "\n]")
 
 cluster_ids <- sort(unique(heatmap_data$cluster))
+
+## Validate that the cluster_names config covers every cluster actually
+## produced by the clustering step -- fail loudly rather than silently
+## falling back to a default label if the user added/removed clusters
+## without updating the config above.
+missing_names <- setdiff(as.character(cluster_ids), names(cluster_names))
+if (length(missing_names) > 0) {
+  stop("cluster_names config is missing names for cluster(s): ",
+       paste(missing_names, collapse = ", "),
+       ". Update the cluster_names config at the top of this script.")
+}
+
 cluster_names_js <- paste0(
-  "{", paste(sprintf('%d:"Cluster %d"', cluster_ids, cluster_ids), collapse = ", "), "}"
+  "{", paste(sprintf('%d:"%s"', cluster_ids, cluster_names[as.character(cluster_ids)]),
+             collapse = ", "), "}"
+)
+
+## Sample size per cluster, for display under each cluster header
+cluster_sizes <- cluster_assignments %>%
+  count(cluster) %>%
+  arrange(cluster)
+
+cluster_sizes_js <- paste0(
+  "{", paste(sprintf('%d:%d', cluster_sizes$cluster, cluster_sizes$n), collapse = ", "), "}"
 )
 
 html_template <- '<!DOCTYPE html>
@@ -181,15 +215,13 @@ html_template <- '<!DOCTYPE html>
   .container { max-width: 800px; margin: 0 auto; background: white; border-radius: 12px; padding: 1.5rem 2rem 2rem; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
   h1 { font-size: 18px; font-weight: 600; margin: 0 0 4px; }
   p.subtitle { font-size: 13px; color: #666; margin: 0 0 1.25rem; }
-  input[type=text] { border: 1px solid #ddd; border-radius: 6px; padding: 6px 8px; font-size: 13px; font-weight: 500; width: 120px; }
   #tooltip { position: absolute; display: none; background: white; border: 1px solid #ddd; border-radius: 8px; padding: 8px 12px; font-size: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.12); pointer-events: none; z-index: 10; max-width: 220px; }
 </style>
 </head>
 <body>
 <div class="container" style="position: relative;">
   <h1>Cluster signature: how each segment differs from the overall sample</h1>
-  <p class="subtitle">Values are standard deviations from the overall low-rater sample mean. Click a cluster name below to relabel it.</p>
-  <div id="name-inputs" style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 1.25rem;"></div>
+  <p class="subtitle">Values are standard deviations from the overall low-rater sample mean.</p>
   <div style="overflow-x: auto;">
     <div id="heatmap-grid" style="display: grid; gap: 4px; min-width: 600px;"></div>
   </div>
@@ -202,11 +234,12 @@ html_template <- '<!DOCTYPE html>
 </div>
 <script>
 const data = __DATA__;
-const clusters = Object.keys(__CLUSTER_NAMES__).map(Number);
+const clusterNames = __CLUSTER_NAMES__;
+const clusterSizes = __CLUSTER_SIZES__;
+const clusters = Object.keys(clusterNames).map(Number);
 const variables = [...new Set(data.map(d => d.variable))];
 const labels = {};
 data.forEach(d => labels[d.variable] = d.label);
-let clusterNames = __CLUSTER_NAMES__;
 const maxAbs = Math.max(...data.map(d => Math.abs(d.effect_size)));
 
 function colorFor(v) {
@@ -225,18 +258,6 @@ function colorFor(v) {
   }
 }
 
-function renderNameInputs() {
-  const container = document.getElementById("name-inputs");
-  container.innerHTML = "";
-  clusters.forEach(c => {
-    const input = document.createElement("input");
-    input.type = "text";
-    input.value = clusterNames[c];
-    input.addEventListener("input", (e) => { clusterNames[c] = e.target.value; renderGrid(); });
-    container.appendChild(input);
-  });
-}
-
 function renderGrid() {
   const grid = document.getElementById("heatmap-grid");
   grid.innerHTML = "";
@@ -244,11 +265,19 @@ function renderGrid() {
   grid.appendChild(document.createElement("div"));
   clusters.forEach(c => {
     const head = document.createElement("div");
-    head.textContent = clusterNames[c];
-    head.style.fontWeight = "600";
-    head.style.fontSize = "13px";
     head.style.textAlign = "center";
     head.style.padding = "8px 4px";
+    const nameEl = document.createElement("div");
+    nameEl.textContent = clusterNames[c];
+    nameEl.style.fontWeight = "600";
+    nameEl.style.fontSize = "13px";
+    const sizeEl = document.createElement("div");
+    sizeEl.textContent = "n = " + clusterSizes[c].toLocaleString();
+    sizeEl.style.fontSize = "11px";
+    sizeEl.style.color = "#888";
+    sizeEl.style.marginTop = "2px";
+    head.appendChild(nameEl);
+    head.appendChild(sizeEl);
     grid.appendChild(head);
   });
   variables.forEach(v => {
@@ -290,7 +319,6 @@ function renderGrid() {
     });
   });
 }
-renderNameInputs();
 renderGrid();
 </script>
 </body>
@@ -298,6 +326,7 @@ renderGrid();
 
 html_output <- gsub("__DATA__", data_js, html_template, fixed = TRUE)
 html_output <- gsub("__CLUSTER_NAMES__", cluster_names_js, html_output, fixed = TRUE)
+html_output <- gsub("__CLUSTER_SIZES__", cluster_sizes_js, html_output, fixed = TRUE)
 
 writeLines(html_output, "04c_interactive_heatmap.html")
 cat("Generated 04c_interactive_heatmap.html (data embedded automatically)\n")
