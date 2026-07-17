@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Cluster Signature Heatmap</title>
+<style>
+  body { font-family: -apple-system, "Segoe UI", Arial, sans-serif; background: #fafafa; padding: 2rem; color: #1a1a1a; }
+  .container { max-width: 800px; margin: 0 auto; background: white; border-radius: 12px; padding: 1.5rem 2rem 2rem; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
+  h1 { font-size: 18px; font-weight: 600; margin: 0 0 4px; }
+  p.subtitle { font-size: 13px; color: #666; margin: 0 0 1.25rem; }
+  #tooltip { position: absolute; display: none; background: white; border: 1px solid #ddd; border-radius: 8px; padding: 8px 12px; font-size: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.12); pointer-events: none; z-index: 10; max-width: 220px; }
+</style>
+</head>
+<body>
+<div class="container" style="position: relative;">
+  <h1>Segments among predicted low CAHPS raters (&#8805 70% probability of rating below 3.5 stars)</h1>
+  <p class="subtitle">Values are standard deviations from the overall low-rater sample mean.</p>
+  <div style="overflow-x: auto;">
+    <div id="heatmap-grid" style="display: grid; gap: 4px; min-width: 600px;"></div>
+  </div>
+  <div style="display: flex; align-items: center; gap: 12px; margin-top: 1.25rem; font-size: 12px; color: #666;">
+    <span>Lower than average</span>
+    <div style="flex: 1; height: 10px; border-radius: 5px; background: linear-gradient(to right, #185FA5, #ffffff, #993C1D);"></div>
+    <span>Higher than average</span>
+  </div>
+  <div id="tooltip"></div>
+</div>
+<script>
+const data = [
+{"cluster":1,"variable":"total_appeals","label":"Appeals filed","cluster_mean":0.001,"overall_mean":0.043,"effect_size":-0.156},
+{"cluster":2,"variable":"total_appeals","label":"Appeals filed","cluster_mean":1.222,"overall_mean":0.043,"effect_size":4.365},
+{"cluster":3,"variable":"total_appeals","label":"Appeals filed","cluster_mean":0,"overall_mean":0.043,"effect_size":-0.16},
+{"cluster":4,"variable":"total_appeals","label":"Appeals filed","cluster_mean":0,"overall_mean":0.043,"effect_size":-0.16},
+{"cluster":1,"variable":"ct_condit","label":"Chronic conditions (count)","cluster_mean":0.295,"overall_mean":1.404,"effect_size":-0.704},
+{"cluster":2,"variable":"ct_condit","label":"Chronic conditions (count)","cluster_mean":1.57,"overall_mean":1.404,"effect_size":0.105},
+{"cluster":3,"variable":"ct_condit","label":"Chronic conditions (count)","cluster_mean":0.835,"overall_mean":1.404,"effect_size":-0.361},
+{"cluster":4,"variable":"ct_condit","label":"Chronic conditions (count)","cluster_mean":3.629,"overall_mean":1.404,"effect_size":1.413},
+{"cluster":1,"variable":"charlson_index","label":"Comorbidity burden (Charlson)","cluster_mean":0.372,"overall_mean":1.868,"effect_size":-0.651},
+{"cluster":2,"variable":"charlson_index","label":"Comorbidity burden (Charlson)","cluster_mean":2.093,"overall_mean":1.868,"effect_size":0.098},
+{"cluster":3,"variable":"charlson_index","label":"Comorbidity burden (Charlson)","cluster_mean":1.021,"overall_mean":1.868,"effect_size":-0.369},
+{"cluster":4,"variable":"charlson_index","label":"Comorbidity burden (Charlson)","cluster_mean":5.086,"overall_mean":1.868,"effect_size":1.4},
+{"cluster":1,"variable":"total_med_denied","label":"Medical claims denied","cluster_mean":0.019,"overall_mean":0.073,"effect_size":-0.141},
+{"cluster":2,"variable":"total_med_denied","label":"Medical claims denied","cluster_mean":0.524,"overall_mean":0.073,"effect_size":1.167},
+{"cluster":3,"variable":"total_med_denied","label":"Medical claims denied","cluster_mean":0.045,"overall_mean":0.073,"effect_size":-0.074},
+{"cluster":4,"variable":"total_med_denied","label":"Medical claims denied","cluster_mean":0.114,"overall_mean":0.073,"effect_size":0.106},
+{"cluster":1,"variable":"total_supply_days","label":"Pharmacy supply days","cluster_mean":249.1,"overall_mean":1444.715,"effect_size":-1.042},
+{"cluster":2,"variable":"total_supply_days","label":"Pharmacy supply days","cluster_mean":1613.017,"overall_mean":1444.715,"effect_size":0.147},
+{"cluster":3,"variable":"total_supply_days","label":"Pharmacy supply days","cluster_mean":1341.65,"overall_mean":1444.715,"effect_size":-0.09},
+{"cluster":4,"variable":"total_supply_days","label":"Pharmacy supply days","cluster_mean":2483.699,"overall_mean":1444.715,"effect_size":0.906},
+{"cluster":1,"variable":"DXCG_RRS_EXP_CON","label":"DxCG","cluster_mean":0.335,"overall_mean":0.801,"effect_size":-0.386},
+{"cluster":2,"variable":"DXCG_RRS_EXP_CON","label":"DxCG","cluster_mean":1.031,"overall_mean":0.801,"effect_size":0.191},
+{"cluster":3,"variable":"DXCG_RRS_EXP_CON","label":"DxCG","cluster_mean":0.511,"overall_mean":0.801,"effect_size":-0.24},
+{"cluster":4,"variable":"DXCG_RRS_EXP_CON","label":"DxCG","cluster_mean":1.844,"overall_mean":0.801,"effect_size":0.866},
+{"cluster":1,"variable":"total_grievances","label":"Grievances filed","cluster_mean":0.788,"overall_mean":1.148,"effect_size":-0.184},
+{"cluster":2,"variable":"total_grievances","label":"Grievances filed","cluster_mean":2.619,"overall_mean":1.148,"effect_size":0.753},
+{"cluster":3,"variable":"total_grievances","label":"Grievances filed","cluster_mean":1.127,"overall_mean":1.148,"effect_size":-0.011},
+{"cluster":4,"variable":"total_grievances","label":"Grievances filed","cluster_mean":1.211,"overall_mean":1.148,"effect_size":0.032},
+{"cluster":1,"variable":"tenure_years","label":"Tenure (years)","cluster_mean":1.766,"overall_mean":3.136,"effect_size":-0.648},
+{"cluster":2,"variable":"tenure_years","label":"Tenure (years)","cluster_mean":3.37,"overall_mean":3.136,"effect_size":0.111},
+{"cluster":3,"variable":"tenure_years","label":"Tenure (years)","cluster_mean":3.264,"overall_mean":3.136,"effect_size":0.061},
+{"cluster":4,"variable":"tenure_years","label":"Tenure (years)","cluster_mean":3.661,"overall_mean":3.136,"effect_size":0.248},
+{"cluster":1,"variable":"total_med_allow","label":"Medical allowed cost","cluster_mean":2228.317,"overall_mean":12122.709,"effect_size":-0.387},
+{"cluster":2,"variable":"total_med_allow","label":"Medical allowed cost","cluster_mean":19052.412,"overall_mean":12122.709,"effect_size":0.271},
+{"cluster":3,"variable":"total_med_allow","label":"Medical allowed cost","cluster_mean":8075.911,"overall_mean":12122.709,"effect_size":-0.158},
+{"cluster":4,"variable":"total_med_allow","label":"Medical allowed cost","cluster_mean":28379.773,"overall_mean":12122.709,"effect_size":0.636},
+{"cluster":1,"variable":"total_med_oop","label":"Medical out-of-pocket cost","cluster_mean":387.219,"overall_mean":1257.876,"effect_size":-0.605},
+{"cluster":2,"variable":"total_med_oop","label":"Medical out-of-pocket cost","cluster_mean":1724.696,"overall_mean":1257.876,"effect_size":0.324},
+{"cluster":3,"variable":"total_med_oop","label":"Medical out-of-pocket cost","cluster_mean":1109.638,"overall_mean":1257.876,"effect_size":-0.103},
+{"cluster":4,"variable":"total_med_oop","label":"Medical out-of-pocket cost","cluster_mean":2155.588,"overall_mean":1257.876,"effect_size":0.624},
+{"cluster":1,"variable":"any_auth","label":"Any prior authorization","cluster_mean":0.437,"overall_mean":0.709,"effect_size":-0.598},
+{"cluster":2,"variable":"any_auth","label":"Any prior authorization","cluster_mean":0.881,"overall_mean":0.709,"effect_size":0.38},
+{"cluster":3,"variable":"any_auth","label":"Any prior authorization","cluster_mean":0.717,"overall_mean":0.709,"effect_size":0.019},
+{"cluster":4,"variable":"any_auth","label":"Any prior authorization","cluster_mean":0.838,"overall_mean":0.709,"effect_size":0.285},
+{"cluster":1,"variable":"total_pharm_oop","label":"Pharmacy out-of-pocket cost","cluster_mean":21.944,"overall_mean":333.964,"effect_size":-0.588},
+{"cluster":2,"variable":"total_pharm_oop","label":"Pharmacy out-of-pocket cost","cluster_mean":410.272,"overall_mean":333.964,"effect_size":0.144},
+{"cluster":3,"variable":"total_pharm_oop","label":"Pharmacy out-of-pocket cost","cluster_mean":326.831,"overall_mean":333.964,"effect_size":-0.013},
+{"cluster":4,"variable":"total_pharm_oop","label":"Pharmacy out-of-pocket cost","cluster_mean":547.174,"overall_mean":333.964,"effect_size":0.402},
+{"cluster":1,"variable":"abandoned_scripts","label":"Abandoned prescriptions","cluster_mean":0.547,"overall_mean":1.659,"effect_size":-0.492},
+{"cluster":2,"variable":"abandoned_scripts","label":"Abandoned prescriptions","cluster_mean":1.759,"overall_mean":1.659,"effect_size":0.045},
+{"cluster":3,"variable":"abandoned_scripts","label":"Abandoned prescriptions","cluster_mean":1.466,"overall_mean":1.659,"effect_size":-0.085},
+{"cluster":4,"variable":"abandoned_scripts","label":"Abandoned prescriptions","cluster_mean":2.892,"overall_mean":1.659,"effect_size":0.546},
+{"cluster":1,"variable":"MEM_AGE","label":"Member age","cluster_mean":71.07,"overall_mean":73.995,"effect_size":-0.362},
+{"cluster":2,"variable":"MEM_AGE","label":"Member age","cluster_mean":74.014,"overall_mean":73.995,"effect_size":0.002},
+{"cluster":3,"variable":"MEM_AGE","label":"Member age","cluster_mean":73.5,"overall_mean":73.995,"effect_size":-0.061},
+{"cluster":4,"variable":"MEM_AGE","label":"Member age","cluster_mean":77.248,"overall_mean":73.995,"effect_size":0.402},
+{"cluster":1,"variable":"mail_order_flag","label":"Mail-order pharmacy user","cluster_mean":0.034,"overall_mean":0.163,"effect_size":-0.349},
+{"cluster":2,"variable":"mail_order_flag","label":"Mail-order pharmacy user","cluster_mean":0.269,"overall_mean":0.163,"effect_size":0.288},
+{"cluster":3,"variable":"mail_order_flag","label":"Mail-order pharmacy user","cluster_mean":0.171,"overall_mean":0.163,"effect_size":0.024},
+{"cluster":4,"variable":"mail_order_flag","label":"Mail-order pharmacy user","cluster_mean":0.207,"overall_mean":0.163,"effect_size":0.121}
+];
+const clusterNames = {1:"Cluster 1:Low-utilization newcomers", 2:"Cluster 2: High Friction, low complexity", 3:"Cluster 3: The 'Common' Low Rater", 4:"Cluster 4: High-complexity, low friction"};
+const clusterSizes = {1:2641, 2:632, 3:10678, 4:3996};
+const clusters = Object.keys(clusterNames).map(Number);
+const variables = [...new Set(data.map(d => d.variable))];
+const labels = {};
+data.forEach(d => labels[d.variable] = d.label);
+const maxAbs = Math.max(...data.map(d => Math.abs(d.effect_size)));
+
+function colorFor(v) {
+  const t = v / maxAbs;
+  if (t >= 0) {
+    const r = Math.round(255 - t * (255-153));
+    const g = Math.round(255 - t * (255-60));
+    const b = Math.round(255 - t * (255-28));
+    return `rgb(${r},${g},${b})`;
+  } else {
+    const at = -t;
+    const r = Math.round(255 - at * (255-24));
+    const g = Math.round(255 - at * (255-95));
+    const b = Math.round(255 - at * (255-165));
+    return `rgb(${r},${g},${b})`;
+  }
+}
+
+function renderGrid() {
+  const grid = document.getElementById("heatmap-grid");
+  grid.innerHTML = "";
+  grid.style.gridTemplateColumns = `200px repeat(${clusters.length}, 1fr)`;
+  grid.appendChild(document.createElement("div"));
+  clusters.forEach(c => {
+    const head = document.createElement("div");
+    head.style.textAlign = "center";
+    head.style.padding = "8px 4px";
+    const nameEl = document.createElement("div");
+    nameEl.textContent = clusterNames[c];
+    nameEl.style.fontWeight = "600";
+    nameEl.style.fontSize = "13px";
+    const sizeEl = document.createElement("div");
+    sizeEl.textContent = "n = " + clusterSizes[c].toLocaleString();
+    sizeEl.style.fontSize = "11px";
+    sizeEl.style.color = "#888";
+    sizeEl.style.marginTop = "2px";
+    head.appendChild(nameEl);
+    head.appendChild(sizeEl);
+    grid.appendChild(head);
+  });
+  variables.forEach(v => {
+    const rowLabel = document.createElement("div");
+    rowLabel.textContent = labels[v];
+    rowLabel.style.fontSize = "13px";
+    rowLabel.style.display = "flex";
+    rowLabel.style.alignItems = "center";
+    rowLabel.style.color = "#555";
+    grid.appendChild(rowLabel);
+    clusters.forEach(c => {
+      const cell = data.find(d => d.variable === v && d.cluster === c);
+      const tile = document.createElement("div");
+      tile.style.background = colorFor(cell.effect_size);
+      tile.style.borderRadius = "6px";
+      tile.style.display = "flex";
+      tile.style.alignItems = "center";
+      tile.style.justifyContent = "center";
+      tile.style.minHeight = "52px";
+      tile.style.fontWeight = "600";
+      tile.style.fontSize = "14px";
+      tile.style.color = Math.abs(cell.effect_size) > maxAbs * 0.55 ? "#fff" : "#1a1a1a";
+      tile.textContent = (cell.effect_size >= 0 ? "+" : "") + cell.effect_size.toFixed(1);
+      tile.addEventListener("mouseenter", () => {
+        const tooltip = document.getElementById("tooltip");
+        tooltip.innerHTML = `<div style="font-weight:600; margin-bottom:4px;">${clusterNames[c]}</div>` +
+          `<div style="color:#666;">${labels[v]}</div>` +
+          `<div style="margin-top:4px;">Cluster average: <b>${cell.cluster_mean.toLocaleString(undefined, {maximumFractionDigits: 2})}</b></div>` +
+          `<div>Overall average: <b>${cell.overall_mean.toLocaleString(undefined, {maximumFractionDigits: 2})}</b></div>` +
+          `<div style="margin-top:4px;">${cell.effect_size >= 0 ? "+" : ""}${cell.effect_size.toFixed(2)} SD from overall mean</div>`;
+        tooltip.style.display = "block";
+        const rect = tile.getBoundingClientRect();
+        const containerRect = grid.getBoundingClientRect();
+        tooltip.style.left = (rect.left - containerRect.left + rect.width/2 - 90) + "px";
+        tooltip.style.top = (rect.top - containerRect.top - 105) + "px";
+      });
+      tile.addEventListener("mouseleave", () => { document.getElementById("tooltip").style.display = "none"; });
+      grid.appendChild(tile);
+    });
+  });
+}
+renderGrid();
+</script>
+</body>
+</html>
