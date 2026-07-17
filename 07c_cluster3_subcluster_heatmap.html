@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Cluster 3 Sub-Cluster Signature Heatmap</title>
+<style>
+  body { font-family: -apple-system, "Segoe UI", Arial, sans-serif; background: #fafafa; padding: 2rem; color: #1a1a1a; }
+  .container { max-width: 900px; margin: 0 auto; background: white; border-radius: 12px; padding: 1.5rem 2rem 2rem; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
+  h1 { font-size: 18px; font-weight: 600; margin: 0 0 4px; }
+  p.subtitle { font-size: 13px; color: #666; margin: 0 0 1.25rem; }
+  #tooltip { position: absolute; display: none; background: white; border: 1px solid #ddd; border-radius: 8px; padding: 8px 12px; font-size: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.12); pointer-events: none; z-index: 10; max-width: 220px; }
+</style>
+</head>
+<body>
+<div class="container" style="position: relative;">
+  <h1>Cluster 3 sub-clusters (hierarchical): how each differs from the Cluster 3 average</h1>
+  <p class="subtitle">Values are standard deviations from the Cluster 3 overall mean (NOT the full low-rater population).</p>
+  <div style="overflow-x: auto;">
+    <div id="heatmap-grid" style="display: grid; gap: 4px; min-width: 600px;"></div>
+  </div>
+  <div style="display: flex; align-items: center; gap: 12px; margin-top: 1.25rem; font-size: 12px; color: #666;">
+    <span>Lower than Cluster 3 average</span>
+    <div style="flex: 1; height: 10px; border-radius: 5px; background: linear-gradient(to right, #185FA5, #ffffff, #993C1D);"></div>
+    <span>Higher than Cluster 3 average</span>
+  </div>
+  <div id="tooltip"></div>
+</div>
+<script>
+const data = [
+{"cluster":1,"variable":"any_interaction","label":"Any live contact in window","cluster_mean":0,"overall_mean":0.804,"effect_size":-2.021},
+{"cluster":2,"variable":"any_interaction","label":"Any live contact in window","cluster_mean":1,"overall_mean":0.804,"effect_size":0.494},
+{"cluster":3,"variable":"any_interaction","label":"Any live contact in window","cluster_mean":1,"overall_mean":0.804,"effect_size":0.494},
+{"cluster":1,"variable":"n_distinct_types","label":"# distinct channels used","cluster_mean":0,"overall_mean":0.884,"effect_size":-1.721},
+{"cluster":2,"variable":"n_distinct_types","label":"# distinct channels used","cluster_mean":1.224,"overall_mean":0.884,"effect_size":0.663},
+{"cluster":3,"variable":"n_distinct_types","label":"# distinct channels used","cluster_mean":1.01,"overall_mean":0.884,"effect_size":0.246},
+{"cluster":1,"variable":"days_since_last_interaction","label":"Days since last contact","cluster_mean":200,"overall_mean":84.639,"effect_size":1.519},
+{"cluster":2,"variable":"days_since_last_interaction","label":"Days since last contact","cluster_mean":60.669,"overall_mean":84.639,"effect_size":-0.316},
+{"cluster":3,"variable":"days_since_last_interaction","label":"Days since last contact","cluster_mean":102.005,"overall_mean":84.639,"effect_size":0.229},
+{"cluster":1,"variable":"n_distinct_reasons","label":"# distinct contact reasons","cluster_mean":0,"overall_mean":2.708,"effect_size":-1.177},
+{"cluster":2,"variable":"n_distinct_reasons","label":"# distinct contact reasons","cluster_mean":4.584,"overall_mean":2.708,"effect_size":0.816},
+{"cluster":3,"variable":"n_distinct_reasons","label":"# distinct contact reasons","cluster_mean":2.489,"overall_mean":2.708,"effect_size":-0.095},
+{"cluster":1,"variable":"mean_duration_min","label":"Avg interaction length (min)","cluster_mean":8.667,"overall_mean":18.789,"effect_size":-1.13},
+{"cluster":2,"variable":"mean_duration_min","label":"Avg interaction length (min)","cluster_mean":21.36,"overall_mean":18.789,"effect_size":0.287},
+{"cluster":3,"variable":"mean_duration_min","label":"Avg interaction length (min)","cluster_mean":16.926,"overall_mean":18.789,"effect_size":-0.208},
+{"cluster":1,"variable":"repeat_same_reason_30d","label":"Repeated same reason within 30 days","cluster_mean":0,"overall_mean":0.373,"effect_size":-0.771},
+{"cluster":2,"variable":"repeat_same_reason_30d","label":"Repeated same reason within 30 days","cluster_mean":0.815,"overall_mean":0.373,"effect_size":0.914},
+{"cluster":3,"variable":"repeat_same_reason_30d","label":"Repeated same reason within 30 days","cluster_mean":0.21,"overall_mean":0.373,"effect_size":-0.337},
+{"cluster":1,"variable":"any_long_interaction","label":"Ever had a long interaction (>= p90)","cluster_mean":0,"overall_mean":0.257,"effect_size":-0.588},
+{"cluster":2,"variable":"any_long_interaction","label":"Ever had a long interaction (>= p90)","cluster_mean":0.614,"overall_mean":0.257,"effect_size":0.815},
+{"cluster":3,"variable":"any_long_interaction","label":"Ever had a long interaction (>= p90)","cluster_mean":0.107,"overall_mean":0.257,"effect_size":-0.343},
+{"cluster":1,"variable":"n_interactions_total","label":"Total live interactions","cluster_mean":0,"overall_mean":4.741,"effect_size":-0.806},
+{"cluster":2,"variable":"n_interactions_total","label":"Total live interactions","cluster_mean":9.276,"overall_mean":4.741,"effect_size":0.772},
+{"cluster":3,"variable":"n_interactions_total","label":"Total live interactions","cluster_mean":3.451,"overall_mean":4.741,"effect_size":-0.219},
+{"cluster":1,"variable":"max_interactions_in_30d","label":"Peak contacts in any 30-day period","cluster_mean":1,"overall_mean":2.733,"effect_size":-0.838},
+{"cluster":2,"variable":"max_interactions_in_30d","label":"Peak contacts in any 30-day period","cluster_mean":3.946,"overall_mean":2.733,"effect_size":0.587},
+{"cluster":3,"variable":"max_interactions_in_30d","label":"Peak contacts in any 30-day period","cluster_mean":1.853,"overall_mean":2.733,"effect_size":-0.425},
+{"cluster":1,"variable":"ever_type_chat","label":"Ever used Chat","cluster_mean":0,"overall_mean":0.09,"effect_size":-0.315},
+{"cluster":2,"variable":"ever_type_chat","label":"Ever used Chat","cluster_mean":0.241,"overall_mean":0.09,"effect_size":0.526},
+{"cluster":3,"variable":"ever_type_chat","label":"Ever used Chat","cluster_mean":0.019,"overall_mean":0.09,"effect_size":-0.249}
+];
+const clusterNames = {1:"Sub-cluster 1", 2:"Sub-cluster 2", 3:"Sub-cluster 3"};
+const clusterSizes = {1:2099, 2:3607, 3:4972};
+const clusters = Object.keys(clusterNames).map(Number);
+const variables = [...new Set(data.map(d => d.variable))];
+const labels = {};
+data.forEach(d => labels[d.variable] = d.label);
+const maxAbs = Math.max(...data.map(d => Math.abs(d.effect_size)));
+
+function colorFor(v) {
+  const t = v / maxAbs;
+  if (t >= 0) {
+    const r = Math.round(255 - t * (255-153));
+    const g = Math.round(255 - t * (255-60));
+    const b = Math.round(255 - t * (255-28));
+    return `rgb(${r},${g},${b})`;
+  } else {
+    const at = -t;
+    const r = Math.round(255 - at * (255-24));
+    const g = Math.round(255 - at * (255-95));
+    const b = Math.round(255 - at * (255-165));
+    return `rgb(${r},${g},${b})`;
+  }
+}
+
+function renderGrid() {
+  const grid = document.getElementById("heatmap-grid");
+  grid.innerHTML = "";
+  grid.style.gridTemplateColumns = `220px repeat(${clusters.length}, 1fr)`;
+  grid.appendChild(document.createElement("div"));
+  clusters.forEach(c => {
+    const head = document.createElement("div");
+    head.style.textAlign = "center";
+    head.style.padding = "8px 4px";
+    const nameEl = document.createElement("div");
+    nameEl.textContent = clusterNames[c];
+    nameEl.style.fontWeight = "600";
+    nameEl.style.fontSize = "13px";
+    const sizeEl = document.createElement("div");
+    sizeEl.textContent = "n = " + clusterSizes[c].toLocaleString();
+    sizeEl.style.fontSize = "11px";
+    sizeEl.style.color = "#888";
+    sizeEl.style.marginTop = "2px";
+    head.appendChild(nameEl);
+    head.appendChild(sizeEl);
+    grid.appendChild(head);
+  });
+  variables.forEach(v => {
+    const rowLabel = document.createElement("div");
+    rowLabel.textContent = labels[v];
+    rowLabel.style.fontSize = "13px";
+    rowLabel.style.display = "flex";
+    rowLabel.style.alignItems = "center";
+    rowLabel.style.color = "#555";
+    grid.appendChild(rowLabel);
+    clusters.forEach(c => {
+      const cell = data.find(d => d.variable === v && d.cluster === c);
+      const tile = document.createElement("div");
+      tile.style.background = colorFor(cell.effect_size);
+      tile.style.borderRadius = "6px";
+      tile.style.display = "flex";
+      tile.style.alignItems = "center";
+      tile.style.justifyContent = "center";
+      tile.style.minHeight = "52px";
+      tile.style.fontWeight = "600";
+      tile.style.fontSize = "14px";
+      tile.style.color = Math.abs(cell.effect_size) > maxAbs * 0.55 ? "#fff" : "#1a1a1a";
+      tile.textContent = (cell.effect_size >= 0 ? "+" : "") + cell.effect_size.toFixed(1);
+      tile.addEventListener("mouseenter", () => {
+        const tooltip = document.getElementById("tooltip");
+        tooltip.innerHTML = `<div style="font-weight:600; margin-bottom:4px;">${clusterNames[c]}</div>` +
+          `<div style="color:#666;">${labels[v]}</div>` +
+          `<div style="margin-top:4px;">Sub-cluster average: <b>${cell.cluster_mean.toLocaleString(undefined, {maximumFractionDigits: 2})}</b></div>` +
+          `<div>Cluster 3 average: <b>${cell.overall_mean.toLocaleString(undefined, {maximumFractionDigits: 2})}</b></div>` +
+          `<div style="margin-top:4px;">${cell.effect_size >= 0 ? "+" : ""}${cell.effect_size.toFixed(2)} SD from Cluster 3 mean</div>`;
+        tooltip.style.display = "block";
+        const rect = tile.getBoundingClientRect();
+        const containerRect = grid.getBoundingClientRect();
+        tooltip.style.left = (rect.left - containerRect.left + rect.width/2 - 90) + "px";
+        tooltip.style.top = (rect.top - containerRect.top - 105) + "px";
+      });
+      tile.addEventListener("mouseleave", () => { document.getElementById("tooltip").style.display = "none"; });
+      grid.appendChild(tile);
+    });
+  });
+}
+renderGrid();
+</script>
+</body>
+</html>
