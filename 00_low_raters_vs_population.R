@@ -252,32 +252,112 @@ for (v in c(categorical_vars, profiling_only_categorical)) {
 ## ------------------------------------------------------------
 ## 8. TORNADO CHART -- top distinguishing variables
 ## ------------------------------------------------------------
+
+## Human-readable labels for the clustering variables -- same mapping used
+## in 04a_build_heatmap_data.R (js_label_lookup) and
+## 07_profile_hier_subclusters.R (variable_labels_default), kept in sync
+## here deliberately so a variable reads the same way across every
+## deliverable in this project. If a variable used in this script isn't in
+## this lookup, it falls back to the raw name -- extend the list below
+## rather than let that happen silently.
+variable_labels <- c(
+  total_grievances    = "Grievances filed",
+  ct_condit           = "Chronic conditions (count)",
+  charlson_index      = "Comorbidity burden (Charlson)",
+  total_med_oop       = "Medical out-of-pocket cost",
+  total_med_allow     = "Medical allowed cost",
+  any_auth            = "Any prior authorization",
+  total_pharm_oop     = "Pharmacy out-of-pocket cost",
+  total_pharm_allow   = "Pharmacy allowed cost",
+  total_supply_days   = "Pharmacy supply days",
+  abandoned_scripts   = "Abandoned prescriptions",
+  total_pharm_denied  = "Pharmacy claims denied",
+  total_med_denied    = "Medical claims denied",
+  total_appeals       = "Appeals filed",
+  DXCG_RRS_EXP_CON    = "Predicted risk score",
+  MEM_AGE             = "Member age",
+  tenure_years        = "Tenure (years)",
+  ses_index           = "Socioeconomic index",
+  family_members      = "Household size",
+  myblue_visits       = "Member portal visits",
+  lis_ind             = "Low-income subsidy",
+  dis_ind             = "Disability status",
+  email_optin         = "Email opt-in",
+  mail_order_flag     = "Mail-order pharmacy user"
+)
+get_label <- function(v) if (v %in% names(variable_labels)) variable_labels[[v]] else v
+
+## Any variable in the tornado chart missing a label above -- surfaced
+## loudly rather than silently falling back to the raw column name.
+unlabeled <- setdiff(effect_sizes$variable[seq_len(min(top_n_tornado, nrow(effect_sizes)))],
+                      names(variable_labels))
+if (length(unlabeled) > 0) {
+  cat("\nNOTE: no human-readable label defined for:", paste(unlabeled, collapse = ", "),
+      "-- add to variable_labels above; raw variable name used as a fallback for now.\n")
+}
+
 tornado_data <- effect_sizes %>%
   slice_head(n = top_n_tornado) %>%
   mutate(
     direction = if_else(cohens_d > 0, "Higher among low raters", "Lower among low raters"),
-    variable = factor(variable, levels = rev(variable))
+    ## Explicit level order (not alphabetical) so the bottom legend reads
+    ## left-to-right as "Lower" then "Higher" -- matching the direction
+    ## each color's bars actually point on the plot (blue bars extend left
+    ## of 0, red bars extend right of 0).
+    direction = factor(direction, levels = c("Lower among low raters", "Higher among low raters")),
+    variable_label = sapply(as.character(variable), get_label),
+    variable_label = factor(variable_label, levels = rev(variable_label))
   )
 
-tornado_plot <- ggplot(tornado_data, aes(x = variable, y = cohens_d, fill = direction)) +
+## Wrap the subtitle manually -- ggplot2 does not auto-wrap plot titles/
+## subtitles, so a long one-line string (with large group sizes) runs off
+## the right edge of the saved image rather than wrapping to a second line.
+subtitle_text <- paste0(
+  "Standardized difference (Cohen's d), predicted low raters (n=",
+  format(group_counts["Predicted low rater"], big.mark = ","),
+  ") vs. remaining members (n=",
+  format(group_counts["Remaining members"], big.mark = ","), ")"
+)
+subtitle_wrapped <- paste(strwrap(subtitle_text, width = 65), collapse = "\n")
+
+## Plain-language footnote explaining Cohen's d and how to read the chart,
+## for readers who aren't going to look up the statistic elsewhere. Wrapped
+## the same way as the subtitle, for the same reason.
+caption_text <- paste(
+  "Cohen's d measures how far apart the two groups' averages are, in",
+  "standard-deviation units -- it accounts for how spread out each group's",
+  "values are, not just the raw difference. Rough guide: ~0.2 is a small",
+  "difference, ~0.5 is moderate, ~0.8 or higher is large. Bars pointing",
+  "right (red) mean predicted low raters average higher on that measure",
+  "than the rest of the membership; bars pointing left (blue) mean lower.",
+  "Longer bars = bigger gap between the two groups."
+)
+caption_wrapped <- paste(strwrap(caption_text, width = 95), collapse = "\n")
+
+tornado_plot <- ggplot(tornado_data, aes(x = variable_label, y = cohens_d, fill = direction)) +
   geom_col(width = 0.65) +
   coord_flip() +
   scale_fill_manual(values = c("Higher among low raters" = "#993C1D",
                                 "Lower among low raters" = "#185FA5")) +
   labs(
     title = "How predicted low raters differ from the rest of the membership",
-    subtitle = paste0("Standardized difference (Cohen's d), predicted low raters (n=",
-                       format(group_counts["Predicted low rater"], big.mark = ","),
-                       ") vs. remaining members (n=",
-                       format(group_counts["Remaining members"], big.mark = ","), ")"),
+    subtitle = subtitle_wrapped,
     x = NULL, y = "Cohen's d",
-    fill = NULL
+    fill = NULL,
+    caption = caption_wrapped
   ) +
   theme_minimal(base_size = 13) +
-  theme(legend.position = "bottom", panel.grid.minor = element_blank())
+  theme(
+    legend.position = "bottom",
+    panel.grid.minor = element_blank(),
+    plot.title.position = "plot",
+    plot.subtitle = element_text(size = 10, color = "grey30"),
+    plot.caption = element_text(size = 8, color = "grey40", hjust = 0, lineheight = 1.2),
+    plot.caption.position = "plot"
+  )
 
 ggsave(file.path(plot_dir, "low_raters_vs_population_tornado.png"),
-       tornado_plot, width = 9, height = 7, dpi = 200)
+       tornado_plot, width = 9, height = 7.8, dpi = 200)
 cat("\nSaved tornado chart to", file.path(plot_dir, "low_raters_vs_population_tornado.png"), "\n")
 
 ## ------------------------------------------------------------
