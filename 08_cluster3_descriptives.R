@@ -13,10 +13,12 @@
 ## particular provider groups or regions even though it doesn't
 ## separate on the clustering features.
 ##
-## Benchmarks Cluster 3 against the overall low-rater population
-## (not just standalone %s), so the output speaks to "does Cluster 3
-## skew toward specific provider groups/regions" rather than just
-## "here is Cluster 3's distribution."
+## Benchmarks Cluster 3 against the OTHER THREE CLUSTERS COMBINED
+## (Clusters 1, 2, 4) -- not the full low-rater sample. Cluster 3 is
+## ~60% of the sample, so a "vs. everyone" comparison is mostly
+## Cluster 3 vs. itself and mutes any real gap. Comparing against the
+## other clusters combined gives a cleaner read on whether Cluster 3
+## actually looks different on these two variables.
 ## ============================================================
 
 library(dplyr)
@@ -54,18 +56,26 @@ if (!(target_cluster %in% unique(profile_data$cluster))) {
 
 cluster3_n <- sum(profile_data$cluster == target_cluster)
 overall_n  <- nrow(profile_data)
+other_clusters_n <- overall_n - cluster3_n
+other_cluster_ids <- sort(setdiff(unique(profile_data$cluster), target_cluster))
+
 cat("Cluster", target_cluster, "members:", cluster3_n,
     sprintf("(%.1f%% of the low-rater sample)\n", 100 * cluster3_n / overall_n))
+cat("Other clusters combined (", paste(other_cluster_ids, collapse = ", "), "): ",
+    other_clusters_n, " members\n", sep = "")
 
 ## ------------------------------------------------------------
 ## 2. HELPER -- distribution table for a categorical variable,
-##    Cluster 3 vs. overall low-rater population, ranked by gap
+##    Cluster 3 vs. the OTHER CLUSTERS COMBINED, ranked by gap
 ## ------------------------------------------------------------
 build_distribution_table <- function(data, var, cluster_col, target) {
-  overall_tab <- data %>%
+  ## Benchmark computed on every cluster EXCEPT the target -- this is the
+  ## key difference from a "vs. overall sample" comparison (see header note).
+  other_tab <- data %>%
+    filter(.data[[cluster_col]] != target) %>%
     count(level = .data[[var]]) %>%
-    mutate(pct_overall = round(100 * n / sum(n), 1)) %>%
-    select(level, n_overall = n, pct_overall)
+    mutate(pct_other_clusters = round(100 * n / sum(n), 1)) %>%
+    select(level, n_other_clusters = n, pct_other_clusters)
 
   cluster_tab <- data %>%
     filter(.data[[cluster_col]] == target) %>%
@@ -73,12 +83,12 @@ build_distribution_table <- function(data, var, cluster_col, target) {
     mutate(pct_cluster3 = round(100 * n / sum(n), 1)) %>%
     select(level, n_cluster3 = n, pct_cluster3)
 
-  overall_tab %>%
+  other_tab %>%
     left_join(cluster_tab, by = "level") %>%
     mutate(
       n_cluster3   = coalesce(n_cluster3, 0L),
       pct_cluster3 = coalesce(pct_cluster3, 0),
-      pct_point_diff = round(pct_cluster3 - pct_overall, 1)
+      pct_point_diff = round(pct_cluster3 - pct_other_clusters, 1)
     ) %>%
     arrange(desc(abs(pct_point_diff)))
 }
@@ -87,7 +97,7 @@ build_distribution_table <- function(data, var, cluster_col, target) {
 ## 3. PROVIDER GROUP DISTRIBUTION
 ## ------------------------------------------------------------
 prv_group_table <- build_distribution_table(profile_data, "PRV_GROUP", "cluster", target_cluster)
-cat("\n=== Provider group: Cluster", target_cluster, "vs. overall low-rater population ===\n")
+cat("\n=== Provider group: Cluster", target_cluster, "vs. other clusters combined ===\n")
 print(prv_group_table, n = 30)
 write.csv(prv_group_table, "cluster3_provider_group_distribution.csv", row.names = FALSE)
 
@@ -96,23 +106,24 @@ write.csv(prv_group_table, "cluster3_provider_group_distribution.csv", row.names
 ## ------------------------------------------------------------
 region_table <- build_distribution_table(profile_data, "MA_REGION", "cluster", target_cluster)
 cat("\n=== Geographic region (MA_REGION): Cluster", target_cluster,
-    "vs. overall low-rater population ===\n")
+    "vs. other clusters combined ===\n")
 print(region_table, n = 30)
 write.csv(region_table, "cluster3_region_distribution.csv", row.names = FALSE)
 
 ## ------------------------------------------------------------
-## 5. PLOTS -- grouped bar charts, Cluster 3 vs. overall
+## 5. PLOTS -- grouped bar charts, Cluster 3 vs. other clusters combined
 ## ------------------------------------------------------------
 make_comparison_plot <- function(tab, title, x_label) {
   plot_data <- tab %>%
-    select(level, `Cluster 3` = pct_cluster3, `Overall low-rater population` = pct_overall) %>%
+    select(level, `Cluster 3` = pct_cluster3,
+           `Other clusters (1, 2, 4)` = pct_other_clusters) %>%
     pivot_longer(-level, names_to = "group", values_to = "pct") %>%
     mutate(level = factor(level, levels = tab$level))  # keep gap-ranked order
 
   ggplot(plot_data, aes(x = level, y = pct, fill = group)) +
     geom_col(position = position_dodge(width = 0.7), width = 0.6) +
     scale_fill_manual(values = c("Cluster 3" = "#993C1D",
-                                  "Overall low-rater population" = "#B0B0B0")) +
+                                  "Other clusters (1, 2, 4)" = "#B0B0B0")) +
     labs(title = title, x = x_label, y = "Percent of members", fill = NULL) +
     theme_minimal(base_size = 12) +
     theme(axis.text.x = element_text(angle = 40, hjust = 1),
@@ -122,7 +133,7 @@ make_comparison_plot <- function(tab, title, x_label) {
 prv_plot <- make_comparison_plot(
   prv_group_table,
   title = paste0("Provider group distribution: Cluster 3 (n=", cluster3_n,
-                  ") vs. overall low-rater population (n=", overall_n, ")"),
+                  ") vs. other clusters combined (n=", other_clusters_n, ")"),
   x_label = "Provider group"
 )
 ggsave(file.path(plot_dir, "cluster3_provider_group_barplot.png"),
@@ -131,7 +142,7 @@ ggsave(file.path(plot_dir, "cluster3_provider_group_barplot.png"),
 region_plot <- make_comparison_plot(
   region_table,
   title = paste0("Geographic region distribution: Cluster 3 (n=", cluster3_n,
-                  ") vs. overall low-rater population (n=", overall_n, ")"),
+                  ") vs. other clusters combined (n=", other_clusters_n, ")"),
   x_label = "MA region"
 )
 ggsave(file.path(plot_dir, "cluster3_region_barplot.png"),
@@ -156,8 +167,8 @@ for (i in seq_len(nrow(top_prv))) {
   r <- top_prv[i, ]
   dir_word <- if (r$pct_point_diff > 0) "over-represented" else "under-represented"
   line <- sprintf(
-    "Provider group '%s' is %s in Cluster 3 (%.1f%% vs. %.1f%% overall, %+.1f pts).",
-    r$level, dir_word, r$pct_cluster3, r$pct_overall, r$pct_point_diff
+    "Provider group '%s' is %s in Cluster 3 (%.1f%% vs. %.1f%% in the other clusters, %+.1f pts).",
+    r$level, dir_word, r$pct_cluster3, r$pct_other_clusters, r$pct_point_diff
   )
   narrative_lines <- c(narrative_lines, line)
   cat(line, "\n")
@@ -166,8 +177,8 @@ for (i in seq_len(nrow(top_region))) {
   r <- top_region[i, ]
   dir_word <- if (r$pct_point_diff > 0) "over-represented" else "under-represented"
   line <- sprintf(
-    "Region '%s' is %s in Cluster 3 (%.1f%% vs. %.1f%% overall, %+.1f pts).",
-    r$level, dir_word, r$pct_cluster3, r$pct_overall, r$pct_point_diff
+    "Region '%s' is %s in Cluster 3 (%.1f%% vs. %.1f%% in the other clusters, %+.1f pts).",
+    r$level, dir_word, r$pct_cluster3, r$pct_other_clusters, r$pct_point_diff
   )
   narrative_lines <- c(narrative_lines, line)
   cat(line, "\n")
@@ -175,7 +186,8 @@ for (i in seq_len(nrow(top_region))) {
 
 if (max(abs(c(prv_group_table$pct_point_diff, region_table$pct_point_diff))) < 5) {
   cat("\nNote: all gaps are under 5 percentage points -- consistent with the pattern\n")
-  cat("already seen in 03/04a (Cluster 3 not well-defined by available variables).\n")
+  cat("already seen in 03/04a (Cluster 3 not well-defined by available variables),\n")
+  cat("even against the other clusters combined rather than the full sample.\n")
   cat("Worth stating plainly in the write-up rather than over-reading small gaps.\n")
 }
 
@@ -186,4 +198,4 @@ cat("       cluster3_region_distribution.csv,\n")
 cat("       cluster3_descriptives_narrative_statements.txt,\n")
 cat("       ", plot_dir, "/cluster3_provider_group_barplot.png,\n", sep = "")
 cat("       ", plot_dir, "/cluster3_region_barplot.png\n", sep = "")
-cat("Cluster 3 descriptive profiling complete.\n")
+cat("Cluster 3 descriptive profiling complete (benchmarked against Clusters 1, 2, 4 combined).\n")
