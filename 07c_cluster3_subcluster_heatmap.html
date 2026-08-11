@@ -58,7 +58,7 @@ const data = [
 {"cluster":2,"variable":"ever_type_chat","label":"Ever used Chat","cluster_mean":0.241,"overall_mean":0.09,"effect_size":0.526},
 {"cluster":3,"variable":"ever_type_chat","label":"Ever used Chat","cluster_mean":0.019,"overall_mean":0.09,"effect_size":-0.249}
 ];
-const clusterNames = {1:"Sub-cluster 1", 2:"Sub-cluster 2", 3:"Sub-cluster 3"};
+const clusterNames = {1:"3a: Unengaged with plan", 2:"3b: Intense engagement", 3:"3c: Lighter engagement"};
 const clusterSizes = {1:2099, 2:3607, 3:4972};
 const clusters = Object.keys(clusterNames).map(Number);
 const variables = [...new Set(data.map(d => d.variable))];
