@@ -18,6 +18,7 @@
 library(dplyr)
 library(tidyr)
 library(ggplot2)
+library(haven)
 
 ## ------------------------------------------------------------
 ## 0. CONFIG -- edit before running
@@ -29,7 +30,7 @@ library(ggplot2)
 ## cut. If low_rater_sample.csv is all you have, this script cannot
 ## build the "remaining members" comparison group -- you need the
 ## full scored population (or a representative sample of it) here.
-input_path <- "scored_population.csv"   # <- update to your actual source file
+input_path <- "C:/Users/mmarti06/OneDrive - BCBSMA/Evaluation (Debbie)/Project Work/Medicare Stars/CAHPS/Low Raters Clustering/raw/scored_population.sas7bdat"   
 
 ## How to identify the predicted-low-rater group within input_path.
 ## Set group_flag_source to "probability" if you have a raw predicted
@@ -37,25 +38,26 @@ input_path <- "scored_population.csv"   # <- update to your actual source file
 ## build low_rater_sample.csv (see methods_writeup.md), or to "flag"
 ## if the source file already carries a precomputed 0/1 indicator.
 group_flag_source   <- "probability"   # "probability" or "flag"
-low_rater_prob_col  <- "low_rater_prob"          # used if group_flag_source == "probability"
+low_rater_prob_col  <- "p_lt_3p5"          # used if group_flag_source == "probability"
 low_rater_threshold <- 0.70                       # matches methods_writeup.md definition
-low_rater_flag_col  <- "predicted_low_rater_flag" # used if group_flag_source == "flag"
+#low_rater_flag_col  <- "predicted_low_rater_flag" # used if group_flag_source == "flag"
 
 prv_group_min_pct <- 0.01   # collapse PRV_GROUP levels below 1% of the FULL population
-                             # (mirrors 01_build_feature_set.R; recomputed here on the full
-                             # population rather than reusing the low-rater-only collapse,
-                             # since rare-level thresholds should reflect the population being
-                             # summarized)
+# (mirrors 01_build_feature_set.R; recomputed here on the full
+# population rather than reusing the low-rater-only collapse,
+# since rare-level thresholds should reflect the population being
+# summarized)
 
 top_n_tornado <- 15   # how many variables to show on the tornado chart
 
-plot_dir <- "population_comparison_plots"
+plot_dir <- "C:/Users/mmarti06/OneDrive - BCBSMA/Evaluation (Debbie)/Project Work/Medicare Stars/CAHPS/Low Raters Clustering/output/"
 dir.create(plot_dir, showWarnings = FALSE)
+
 
 ## ------------------------------------------------------------
 ## 1. LOAD RAW DATA
 ## ------------------------------------------------------------
-raw <- read.csv(input_path, stringsAsFactors = FALSE)
+raw <- read_sas(input_path)
 cat("Raw population dimensions:", nrow(raw), "rows x", ncol(raw), "cols\n")
 
 ## Same 24 substantive variables as 01_build_feature_set.R (MEM_NUM +
@@ -274,7 +276,7 @@ variable_labels <- c(
   total_pharm_denied  = "Pharmacy claims denied",
   total_med_denied    = "Medical claims denied",
   total_appeals       = "Appeals filed",
-  DXCG_RRS_EXP_CON    = "Predicted risk score",
+  DXCG_RRS_EXP_CON    = "DxCG",
   MEM_AGE             = "Member age",
   tenure_years        = "Tenure (years)",
   ses_index           = "Socioeconomic index",
